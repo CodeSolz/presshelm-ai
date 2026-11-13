@@ -1,0 +1,91 @@
+/* PressHelm admin: only loaded on the PressHelm page. */
+.presshelm { max-width: 860px; }
+.presshelm-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.presshelm-title span { font-size: 14px; font-weight: 400; color: #50575e; }
+.presshelm-card { background: #fff; border: 1px solid #dcdcde; border-radius: 12px; padding: 24px 28px; margin-top: 16px; }
+.presshelm-card h2 { margin-top: 0; font-size: 1.4em; }
+.presshelm-steps { display: flex; gap: 8px; list-style: none; margin: 16px 0 0; padding: 0; flex-wrap: wrap; }
+.presshelm-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #f0f0f1; color: #50575e; margin: 0; }
+.presshelm-steps li span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #c3c4c7; color: #fff; font-size: 12px; font-weight: 600; }
+.presshelm-steps li.current { background: #2271b1; color: #fff; }
+.presshelm-steps li.current span { background: #fff; color: #2271b1; }
+.presshelm-steps li.done span { background: #00a32a; }
+.presshelm-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 16px 0; }
+.presshelm-choice { display: flex; flex-direction: column; gap: 4px; padding: 14px; border: 1px solid #dcdcde; border-radius: 10px; cursor: pointer; }
+.presshelm-choice:has(input:checked) { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; }
+.presshelm-choice span { color: #50575e; }
+.presshelm-choice em { color: #2271b1; font-style: normal; font-size: 12px; }
+.presshelm-methods { display: grid; gap: 16px; margin-top: 12px; }
+.presshelm-methods.two { grid-template-columns: 1fr 1fr; }
+.presshelm-method { border: 1px solid #dcdcde; border-radius: 10px; padding: 16px; }
+.presshelm-method h4 { margin: 0 0 6px; }
+.presshelm-select { min-width: 280px; max-width: 100%; }
+.presshelm-ok { color: #00a32a; font-weight: 600; }
+.presshelm-small { font-size: 12px; font-weight: 400; }
+.presshelm-guide li { margin-bottom: 6px; }
+.presshelm-summary { list-style: disc; padding-left: 20px; }
+.presshelm-checklist { list-style: none; padding: 0; }
+.presshelm-checklist li { padding: 6px 0 6px 28px; position: relative; }
+.presshelm-checklist li::before { position: absolute; left: 0; font-weight: 700; }
+.presshelm-checklist li.ok::before { content: "✓"; color: #00a32a; }
+.presshelm-checklist li.bad::before { content: "!"; color: #d63638; }
+.presshelm-checklist li.pending::before { content: "…"; color: #8c8f94; }
+.presshelm-request { border: 1px solid #dba617; background: #fcf9e8; border-radius: 4px; padding: 4px 14px 12px; margin: 12px 0; max-width: 640px; }
+.presshelm-request .button { margin-right: 6px; }
+.presshelm-waiting { color: #50575e; font-style: italic; }
+.presshelm .button.hero { font-size: 15px; padding: 6px 22px; height: auto; }
+@media (max-width: 782px) {
+	.presshelm-methods.two { grid-template-columns: 1fr; }
+	.presshelm-card { padding: 16px; }
+}
+
+/* Never wider than the screen. */
+.presshelm, .presshelm * { box-sizing: border-box; }
+.presshelm input.regular-text, .presshelm .presshelm-select { width: 100%; max-width: 420px; }
+@media (max-width: 600px) {
+	.wrap.presshelm { margin-right: 10px; }
+	.presshelm-steps li { padding: 6px 10px; font-size: 12px; }
+	.presshelm-choices { grid-template-columns: 1fr; }
+}
+
+/* Tabs (connected site, D43). */
+.presshelm-tabs { margin-bottom: 0; }
+.presshelm-tabs + .presshelm-card { border-top-left-radius: 0; margin-top: 0; }
+.presshelm-facts { border-collapse: collapse; margin: 8px 0 14px; }
+.presshelm-facts th { text-align: left; font-weight: 600; padding: 6px 24px 6px 0; vertical-align: top; white-space: nowrap; }
+.presshelm-facts td { padding: 6px 0; word-break: break-word; }
+.presshelm-table { max-width: 860px; margin: 10px 0 14px; }
+.presshelm-inline { display: inline-block; margin: 4px 8px 4px 0; }
+.presshelm-bullets { list-style: disc; padding-left: 20px; max-width: 760px; }
+.presshelm-status { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #f0f0f1; font-size: 12px; }
+.presshelm-status.succeeded { background: #edfaef; color: #00611c; }
+.presshelm-status.failed, .presshelm-status.rolled_back, .presshelm-status.rejected { background: #fcf0f1; color: #8a1f1f; }
+@media (max-width: 600px) {
+	.presshelm-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 0; }
+	.presshelm-tabs .nav-tab { margin: 0; font-size: 12px; padding: 4px 8px; float: none; }
+	.presshelm-tabs + .presshelm-card { border-radius: 8px; margin-top: 8px; }
+	.presshelm-facts th { white-space: normal; padding-right: 12px; }
+	.presshelm-table th, .presshelm-table td { font-size: 12px; }
+}
+
+/* Staging fallback note (M1.19). */
+.presshelm-staging-note { border-left: 4px solid #72aee6; background: #f0f6fc; padding: 8px 12px; max-width: 640px; }
+
+/* Emergency stop (M3.3). */
+.presshelm .presshelm-stop { color: #b32d2e; border-color: #b32d2e; }
+.presshelm .presshelm-stop:hover { background: #fcf0f1; color: #8a1f1f; border-color: #8a1f1f; }
+.presshelm-stopped { border-left: 4px solid #dba617; background: #fcf9e8; padding: 8px 12px; max-width: 680px; }
+
+/* Permissions: the owner's limits (one row per area, three inline choices). Scoped and explicit,
+   because other plugins style radio labels globally in wp-admin. */
+.presshelm-policy th { width: 45%; font-weight: 400; vertical-align: middle; }
+.presshelm-policy td { white-space: nowrap; }
+.presshelm-policy label.presshelm-choice { display: inline-flex !important; align-items: center; gap: 4px; width: auto !important; margin: 0 16px 0 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important; }
+.presshelm-policy label.presshelm-choice input { margin: 0 !important; }
+.presshelm-mode-off td { color: #8a1f1f; }
+.presshelm-receipt summary { cursor: pointer; color: #2271b1; font-size: 12px; }
+.presshelm-receipt ul { margin: 4px 0 0 16px; list-style: disc; font-size: 12px; }
+@media (max-width: 782px) { .presshelm-policy td { white-space: normal; } .presshelm-policy th, .presshelm-policy td { display: block; width: auto; } }
+.presshelm-list { margin: 6px 0 12px 20px; list-style: disc; }
+ol.presshelm-list { list-style: decimal; }
+.presshelm-approval { white-space: pre-wrap; word-break: break-word; max-width: 760px; background: #f6f7f7; border: 1px solid #dcdcde; border-radius: 6px; padding: 12px 14px; font-size: 13px; }

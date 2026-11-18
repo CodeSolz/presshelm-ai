@@ -69,7 +69,13 @@ final class Pairing {
 			),
 			self::TTL_MINUTES * MINUTE_IN_SECONDS
 		);
-		return add_query_arg( 'state', rawurlencode( $state ), (string) $res['json']['authorize_url'] );
+		$args = array( 'state' => rawurlencode( $state ) );
+		// The administrator's email as a prefill on PressHelm's sign-in page (they confirm it with a code).
+		$email = (string) wp_get_current_user()->user_email;
+		if ( is_email( $email ) ) {
+			$args['login_hint'] = rawurlencode( $email );
+		}
+		return add_query_arg( $args, (string) $res['json']['authorize_url'] );
 	}
 
 	/**

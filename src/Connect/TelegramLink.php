@@ -59,7 +59,7 @@ final class TelegramLink {
 	 *
 	 * @param string $request_id Request id.
 	 * @param bool   $approve    Approve.
-	 * @return true|\WP_Error
+	 * @return true|string|\WP_Error True when done; the owner's masked email when a code was emailed to finish.
 	 */
 	public static function decide( $request_id, $approve ) {
 		$res = Cloud::post(
@@ -73,9 +73,17 @@ final class TelegramLink {
 			return $res;
 		}
 		if ( 200 !== $res['code'] ) {
+			$code = isset( $res['json']['error']['code'] ) ? (string) $res['json']['error']['code'] : '';
+			if ( in_array( $code, array( 'rate_limited', 'no_contact' ), true ) && ! empty( $res['json']['error']['message'] ) ) {
+				return new \WP_Error( 'presshelm_tg_decide', (string) $res['json']['error']['message'] );
+			}
 			return new \WP_Error( 'presshelm_tg_decide', __( 'This request is no longer valid. Open Telegram again to send a new one.', 'presshelm-ai' ) );
 		}
 		delete_transient( self::WAITING );
+		// Approved: the account owner's emailed code, sent in Telegram, finishes the link.
+		if ( $approve && isset( $res['json']['confirm'], $res['json']['email'] ) && 'email' === $res['json']['confirm'] ) {
+			return sanitize_text_field( (string) $res['json']['email'] );
+		}
 		return true;
 	}
 }

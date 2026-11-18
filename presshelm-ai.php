@@ -3,7 +3,7 @@
  * Plugin Name:       PressHelm AI Site Developer
  * Plugin URI:        https://presshelmai.com/
  * Description:       An AI developer for your content: ask in Telegram, Claude or ChatGPT, approve each change before it runs, and undo any change.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            CodeSolz
@@ -28,7 +28,7 @@ if ( defined( 'PRESSHELM_VERSION' ) ) {
 	return;
 }
 
-define( 'PRESSHELM_VERSION', '1.0.0' );
+define( 'PRESSHELM_VERSION', '1.0.1' );
 define( 'PRESSHELM_FILE', __FILE__ );
 define( 'PRESSHELM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PRESSHELM_URL', plugin_dir_url( __FILE__ ) );

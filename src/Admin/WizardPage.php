@@ -12,6 +12,7 @@ use PressHelm\Connect\Apps;
 use PressHelm\Connect\Connection;
 use PressHelm\Connect\Keys;
 use PressHelm\Connect\Pairing;
+use PressHelm\Connect\SiteLogin;
 use PressHelm\Connect\TelegramLink;
 use PressHelm\Onboarding\CloudStaging;
 use PressHelm\Onboarding\OpenRouterAuth;
@@ -43,7 +44,7 @@ final class WizardPage {
 		add_action( 'admin_init', array( self::class, 'handle_returns' ), 1 );
 		add_action( 'admin_notices', array( self::class, 'stopped_notice' ) );
 		AiForm::register();
-		foreach ( array( 'telegram', 'telegram_shared', 'connect', 'retry_handoff', 'tg_open', 'tg_decide', 'disconnect', 'reset', 'change_start', 'change_cancel', 'reconnect', 'journal_restore', 'rotate_keys', 'emergency_stop', 'emergency_resume', 'save_policy', 'save_mcp', 'save_ai_guard', 'app_decide', 'app_revoke', 'approval_decide' ) as $action ) {
+		foreach ( array( 'telegram', 'telegram_shared', 'connect', 'retry_handoff', 'tg_open', 'tg_decide', 'disconnect', 'reset', 'change_start', 'change_cancel', 'reconnect', 'journal_restore', 'rotate_keys', 'emergency_stop', 'emergency_resume', 'save_policy', 'save_mcp', 'save_ai_guard', 'app_decide', 'app_revoke', 'approval_decide', 'site_login' ) as $action ) {
 			add_action( 'admin_post_presshelm_' . $action, array( self::class, 'action_' . $action ) );
 		}
 	}
@@ -196,6 +197,9 @@ final class WizardPage {
 		$r       = TelegramLink::decide( self::post( 'request_id' ), $approve );
 		if ( is_wp_error( $r ) ) {
 			self::notice( 'error', $r->get_error_message() );
+		} elseif ( is_string( $r ) ) {
+			/* translators: %s: the account owner's email, partly hidden (t***@example.com). */
+			self::notice( 'success', sprintf( __( 'Almost done. To keep your site safe, we emailed a 6-digit code to the PressHelm account owner (%s). Send that code to your bot in Telegram to finish.', 'presshelm-ai' ), $r ) );
 		} else {
 			self::notice( 'success', $approve ? __( 'Telegram account linked. Your bot now answers only you.', 'presshelm-ai' ) : __( 'Request declined.', 'presshelm-ai' ) );
 		}
@@ -216,6 +220,18 @@ final class WizardPage {
 			self::go( Tabs::url( 'ai' ) );
 		}
 		wp_redirect( $url ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- checked to be PressHelm Cloud's sign-in return address in Apps::decide().
+		exit;
+	}
+
+	/** "Sign in with your website": an administrator confirms, the site signs the cloud's nonce. */
+	public static function action_site_login() {
+		self::guard( 'site_login' );
+		$url = SiteLogin::return_url( self::post( 'nonce' ) );
+		if ( is_wp_error( $url ) ) {
+			self::notice( 'error', $url->get_error_message() );
+			self::go( self::url() );
+		}
+		wp_redirect( $url ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- PressHelm Cloud's own sign-in return address (Cloud::base_url()).
 		exit;
 	}
 
@@ -561,8 +577,9 @@ final class WizardPage {
 		// Links from a Claude / ChatGPT app: confirm a sign-in or a change (M4.18).
 		$app_req   = isset( $_GET['ph_app'] ) ? sanitize_text_field( wp_unslash( $_GET['ph_app'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- shows a confirmation form; the decision itself is a nonce-checked POST.
 		$approval  = isset( $_GET['ph_approve'] ) ? sanitize_text_field( wp_unslash( $_GET['ph_approve'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- same.
+		$login     = isset( $_GET['ph_login'] ) ? sanitize_text_field( wp_unslash( $_GET['ph_login'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- shows a confirmation form; signing is a nonce-checked POST.
 		$connected = Connection::is_connected();
-		$confirm   = $connected && ( preg_match( Apps::REQUEST_ID, $app_req ) || preg_match( Apps::APPROVAL_ID, $approval ) );
+		$confirm   = $connected && ( preg_match( Apps::REQUEST_ID, $app_req ) || preg_match( Apps::APPROVAL_ID, $approval ) || preg_match( SiteLogin::NONCE, $login ) );
 		$changing  = $connected ? self::changing() : '';
 		echo '<div class="wrap presshelm ph-app">';
 		Tabs::header( $connected, $connected && ! $confirm && ( '' === $changing || $step !== $changing ) );
@@ -571,7 +588,9 @@ final class WizardPage {
 		self::render_notice();
 		if ( $confirm ) {
 			echo '<div class="presshelm-card">';
-			if ( preg_match( Apps::REQUEST_ID, $app_req ) ) {
+			if ( preg_match( SiteLogin::NONCE, $login ) ) {
+				self::site_login_confirm( $login );
+			} elseif ( preg_match( Apps::REQUEST_ID, $app_req ) ) {
 				self::app_confirm( $app_req );
 			} else {
 				self::approval_confirm( $approval );
@@ -595,6 +614,22 @@ final class WizardPage {
 		echo '<div class="presshelm-card">';
 		call_user_func( array( self::class, 'step_' . $step ) );
 		echo '</div></div>';
+	}
+
+	/**
+	 * "Sign in to PressHelm?" for someone who chose "Sign in with your website".
+	 *
+	 * @param string $nonce The cloud's one-time nonce.
+	 */
+	private static function site_login_confirm( $nonce ) {
+		echo '<h2>' . esc_html__( 'Sign in to PressHelm?', 'presshelm-ai' ) . '</h2>';
+		/* translators: %s: this site's address. */
+		echo '<p>' . esc_html( sprintf( __( 'Someone asked to sign in to the PressHelm dashboard with %s.', 'presshelm-ai' ), home_url( '/' ) ) ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Only continue if you just started this yourself on app.presshelmai.com.', 'presshelm-ai' ) . '</strong> ' . esc_html__( 'On a browser that has not signed in before, PressHelm also emails the account owner a code.', 'presshelm-ai' ) . '</p>';
+		self::form_open( 'site_login' );
+		echo '<input type="hidden" name="nonce" value="' . esc_attr( $nonce ) . '">';
+		echo '<p><button type="submit" class="button button-primary">' . esc_html__( 'Sign in to PressHelm', 'presshelm-ai' ) . '</button> ';
+		echo '<a class="button" href="' . esc_url( self::url() ) . '">' . esc_html__( 'Cancel', 'presshelm-ai' ) . '</a></p></form>';
 	}
 
 	/**

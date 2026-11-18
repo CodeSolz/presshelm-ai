@@ -4,7 +4,7 @@ Tags: ai, ai assistant, telegram, mcp, content
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -112,7 +112,8 @@ This plugin is the WordPress side of the PressHelm service. It connects to the s
 Runs your AI developer, your Telegram bot and the Claude / ChatGPT connector, and keeps your AI key and bot token in an encrypted vault.
 
 * During setup: when you check an AI key, the key and the chosen provider are sent to PressHelm Cloud, which asks the provider which models the key can use and answers with the list (nothing is stored). "Sign in with OpenRouter" is completed by PressHelm Cloud the same way.
-* When you connect: your site address and name, this site's public signing key, and your AI key and bot token (stored in your vault; they are removed from this site).
+* When you connect: your site address and name, this site's public signing key, and your AI key and bot token (stored in your vault; they are removed from this site). Your administrator email is filled in on PressHelm's sign-in page for you; PressHelm emails it a code to confirm it is yours.
+* When you choose "Sign in with your website" on PressHelm and confirm it here: a one-time signature from this site and your WordPress username. PressHelm also asks for a code from the account owner's email on a browser that has not signed in before.
 * While connected (about every minute): the plugin fetches the tasks you asked for and sends their results, and a short site report (WordPress and PHP versions, active theme and plugins, content counts, the limits you set, recent PHP errors with secrets masked, names and versions of available updates).
 * When you ask for it: the content, files or data a task needs, and files you ask the bot to send you.
 * Terms: https://presshelmai.com/terms/ · Privacy: https://presshelmai.com/privacy/
@@ -176,6 +177,11 @@ No. On the Business and Agency plans one Telegram bot (and one Claude or ChatGPT
 4. Claude & ChatGPT apps: connect PressHelm as a connector.
 
 == Changelog ==
+
+= 1.0.1 =
+* Sign in to PressHelm with an emailed code instead of a password: your administrator email is filled in when you connect.
+* New: "Sign in with your website" confirmation page.
+* A new Telegram owner now also needs a code from the PressHelm account owner's email, so a stolen WordPress login cannot take over your assistant.
 
 = 1.0.0 =
 * First release.

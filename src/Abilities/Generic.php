@@ -114,7 +114,7 @@ final class Generic {
 				'mutates'     => true,
 				'run'         => array( self::class, 'text_edit' ),
 				'label'       => 'Replace text inside a stored field',
-				'description' => 'Replaces old_content with new_content in a post field or a post\'s meta, on the site (the value never travels whole). old_content must match exactly once unless replace_all. JSON stays valid or the edit is refused; serialized PHP data is refused. Journaled: undo puts the value back exactly.',
+				'description' => 'Replaces old_content with new_content in a post field or a post\'s meta, on the site (the value never travels whole). old_content must match exactly once unless replace_all. Several changes to the same field: give edits [{old_content, new_content, replace_all?, whole_word?}] instead (applied in order, saved together as one change; if any does not match, nothing is saved). In JSON (e.g. Elementor data) plain text also matches its escaped form (é stored as \\u00e9, / as \\/), and the new text is stored escaped the same way. JSON stays valid or the edit is refused; serialized PHP data is refused. Journaled: undo puts the value back exactly.',
 				'input'       => array(
 					'type'                 => 'object',
 					'properties'           => $target + array(
@@ -129,8 +129,31 @@ final class Generic {
 						),
 						'replace_all' => array( 'type' => 'boolean' ),
 						'whole_word'  => array( 'type' => 'boolean' ),
+						'edits'       => array(
+							'type'     => 'array',
+							'minItems' => 1,
+							'maxItems' => 50,
+							'items'    => array(
+								'type'                 => 'object',
+								'properties'           => array(
+									'old_content' => array(
+										'type'      => 'string',
+										'minLength' => 1,
+										'maxLength' => 20000,
+									),
+									'new_content' => array(
+										'type'      => 'string',
+										'maxLength' => 20000,
+									),
+									'replace_all' => array( 'type' => 'boolean' ),
+									'whole_word'  => array( 'type' => 'boolean' ),
+								),
+								'required'             => array( 'old_content', 'new_content' ),
+								'additionalProperties' => false,
+							),
+						),
 					),
-					'required'             => array( 'target_type', 'old_content', 'new_content' ),
+					'required'             => array( 'target_type' ),
 					'additionalProperties' => false,
 				),
 				'annotations' => array(
@@ -219,7 +242,9 @@ final class Generic {
 		if ( is_wp_error( $t ) ) {
 			return $t;
 		}
-		$hits = self::matches( $t['value'], (string) $p['pattern'], false );
+		$json = self::is_json( $t['value'] );
+		$loc  = self::locate( $t['value'], (string) $p['pattern'], '', false, $json );
+		$hits = $loc['hits'];
 		$out  = array();
 		foreach ( array_slice( $hits, 0, 20 ) as $at ) {
 			$out[] = array(
@@ -231,9 +256,50 @@ final class Generic {
 		return array(
 			'target'  => $t['label'],
 			'bytes'   => strlen( $t['value'] ),
-			'json'    => self::is_json( $t['value'] ),
+			'json'    => $json,
 			'count'   => count( $hits ),
 			'matches' => $out,
+		) + ( $loc['escaped'] ? array( 'stored_as' => 'JSON-escaped: "' . $loc['old'] . '" (an edit with the plain text matches it too)' ) : array() );
+	}
+
+	/**
+	 * Where a text occurs in a value. In JSON the text may be stored escaped (é as é, / as
+	 * \/), so the escaped forms are tried after the plain one; the replacement is escaped the same
+	 * way, so the stored value keeps one style.
+	 *
+	 * @param string $value Stored value.
+	 * @param string $old   Text to find.
+	 * @param string $replacement   Replacement.
+	 * @param bool   $whole Whole words only.
+	 * @param bool   $json  The value is JSON.
+	 * @return array{hits:int[],old:string,new:string,escaped:bool}
+	 */
+	private static function locate( $value, $old, $replacement, $whole, $json ) {
+		$tries = array( array( $old, $replacement ) );
+		if ( $json ) {
+			foreach ( array( 0, JSON_UNESCAPED_UNICODE, JSON_UNESCAPED_SLASHES, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) as $flags ) {
+				$o = substr( (string) wp_json_encode( $old, $flags ), 1, -1 );
+				if ( '' !== $o && $o !== $old ) {
+					$tries[] = array( $o, substr( (string) wp_json_encode( $replacement, $flags ), 1, -1 ) );
+				}
+			}
+		}
+		foreach ( $tries as $i => $try ) {
+			$hits = self::matches( $value, $try[0], $whole );
+			if ( $hits ) {
+				return array(
+					'hits'    => $hits,
+					'old'     => $try[0],
+					'new'     => $try[1],
+					'escaped' => $i > 0,
+				);
+			}
+		}
+		return array(
+			'hits'    => array(),
+			'old'     => $old,
+			'new'     => $replacement,
+			'escaped' => false,
 		);
 	}
 
@@ -257,6 +323,14 @@ final class Generic {
 			foreach ( (array) $values as $raw ) {
 				$raw = (string) $raw; // As stored: serialized data stays a string here.
 				$at  = strpos( $raw, $find );
+				if ( false === $at && self::is_json( $raw ) ) {
+					// JSON may store the text escaped (é as é, / as \/).
+					$loc = self::locate( $raw, $find, '', false, true );
+					if ( $loc['hits'] ) {
+						$at   = $loc['hits'][0];
+						$find = $loc['old'];
+					}
+				}
 				if ( false === $at ) {
 					continue;
 				}
@@ -267,6 +341,7 @@ final class Generic {
 					'count'    => substr_count( $raw, $find ),
 					'first'    => substr( $raw, max( 0, $at - 150 ), min( 150, $at ) + strlen( $find ) + 150 ),
 				);
+				$find     = (string) $p['pattern'];
 				break;
 			}
 			if ( count( $fields ) >= 30 ) {
@@ -295,6 +370,36 @@ final class Generic {
 	}
 
 	/**
+	 * The edits of a text_edit call: one (old_content/new_content) or a list (edits), never both.
+	 *
+	 * @param array $p Input.
+	 * @return array<int,array{old:string,new:string,all:bool,whole:bool}>|\WP_Error
+	 */
+	private static function edit_list( array $p ) {
+		$single = isset( $p['old_content'] ) || isset( $p['new_content'] );
+		if ( isset( $p['edits'] ) && $single ) {
+			return new \WP_Error( 'presshelm_payload', 'Give either old_content/new_content or edits, not both.' );
+		}
+		$list = isset( $p['edits'] ) ? (array) $p['edits'] : array( $p );
+		$out  = array();
+		foreach ( $list as $e ) {
+			if ( ! is_array( $e ) || ! isset( $e['old_content'], $e['new_content'] ) || '' === (string) $e['old_content'] ) {
+				return new \WP_Error( 'presshelm_payload', 'Each edit needs old_content (not empty) and new_content.' );
+			}
+			$out[] = array(
+				'old'   => (string) $e['old_content'],
+				'new'   => (string) $e['new_content'],
+				'all'   => ! empty( $e['replace_all'] ),
+				'whole' => ! empty( $e['whole_word'] ),
+			);
+		}
+		if ( ! $out || count( $out ) > 50 ) {
+			return new \WP_Error( 'presshelm_payload', 'Give 1 to 50 edits.' );
+		}
+		return $out;
+	}
+
+	/**
 	 * Replaces text in a stored value (journaled, checked).
 	 *
 	 * @param array  $p          Target + old/new.
@@ -306,9 +411,11 @@ final class Generic {
 		if ( is_wp_error( $t ) ) {
 			return $t;
 		}
-		$type    = (string) $p['target_type'];
-		$old     = (string) $p['old_content'];
-		$new     = (string) $p['new_content'];
+		$type  = (string) $p['target_type'];
+		$edits = self::edit_list( $p );
+		if ( is_wp_error( $edits ) ) {
+			return $edits;
+		}
 		$post    = $t['post'];
 		$snippet = Guard::refuse_snippet( $post );
 		if ( $snippet ) {
@@ -323,19 +430,27 @@ final class Generic {
 		if ( '' !== $where && preg_match( self::CODE_NAME, $where ) ) {
 			return new \WP_Error( 'presshelm_code_field', '"' . $where . '" holds code (CSS, scripts or snippets); PressHelm does not edit code here. Nothing was changed.' );
 		}
-		if ( self::has_code( $new ) ) {
-			return new \WP_Error( 'presshelm_code', 'new_content contains code (a script, style, PHP, iframe or event handler). Text edits change words, links and images only. Nothing was changed.' );
-		}
-		$hits = self::matches( $t['value'], $old, ! empty( $p['whole_word'] ) );
-		if ( ! $hits ) {
-			return new \WP_Error( 'presshelm_no_match', 'old_content was not found in the ' . $t['label'] . '. Search again (content_text_search) and paste a match exactly as stored.' );
-		}
-		if ( count( $hits ) > 1 && empty( $p['replace_all'] ) ) {
-			return new \WP_Error( 'presshelm_multiple_matches', 'old_content occurs ' . count( $hits ) . ' times; add surrounding text to target one, or set replace_all.' );
-		}
-		$value = $t['value'];
-		foreach ( array_reverse( $hits ) as $at ) {
-			$value = substr_replace( $value, $new, $at, strlen( $old ) );
+		// Applied in order to the value as the previous edits left it; any failure saves nothing.
+		$value    = $t['value'];
+		$json     = self::is_json( $value );
+		$replaced = array();
+		foreach ( $edits as $i => $e ) {
+			$n = count( $edits ) > 1 ? 'Edit ' . ( $i + 1 ) . ': ' : '';
+			if ( self::has_code( $e['new'] ) ) {
+				return new \WP_Error( 'presshelm_code', $n . 'new_content contains code (a script, style, PHP, iframe or event handler). Text edits change words, links and images only. Nothing was changed.' );
+			}
+			$loc  = self::locate( $value, $e['old'], $e['new'], $e['whole'], $json );
+			$hits = $loc['hits'];
+			if ( ! $hits ) {
+				return new \WP_Error( 'presshelm_no_match', $n . 'old_content was not found in the ' . $t['label'] . ( $i > 0 ? ' (after the edits before it)' : '' ) . '. Search again (content_text_search) and paste a match exactly as stored. Nothing was changed.' );
+			}
+			if ( count( $hits ) > 1 && ! $e['all'] ) {
+				return new \WP_Error( 'presshelm_multiple_matches', $n . 'old_content occurs ' . count( $hits ) . ' times; add surrounding text to target one, or set replace_all. Nothing was changed.' );
+			}
+			foreach ( array_reverse( $hits ) as $at ) {
+				$value = substr_replace( $value, $loc['new'], $at, strlen( $loc['old'] ) );
+			}
+			$replaced[] = count( $hits );
 		}
 		// Code already there may not change either (e.g. the words inside an existing script).
 		if ( Registry::new_code( $t['value'], $value ) ) {
@@ -403,7 +518,7 @@ final class Generic {
 		return array(
 			'id'         => $post->ID,
 			'target'     => $t['label'],
-			'replaced'   => count( $hits ),
+			'replaced'   => 1 === count( $replaced ) ? $replaced[0] : $replaced,
 			'journal_id' => $journal,
 		);
 	}

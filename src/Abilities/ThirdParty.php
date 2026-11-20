@@ -171,6 +171,7 @@ final class ThirdParty {
 			$more = $data ? ' Details: ' . mb_substr( (string) wp_json_encode( $data ), 0, 1500 ) : '';
 			return new \WP_Error( 'presshelm_ability_failed', $r->get_error_message() . $more );
 		}
+		$r    = DbRules::redact_deep( $r );
 		$json = (string) wp_json_encode( $r );
 		return array(
 			'ability' => $a->get_name(),

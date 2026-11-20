@@ -71,9 +71,96 @@ final class DbRules {
 			// Password hashes wherever they are (phpass, bcrypt, argon2, WordPress 6.8+ "$wp$").
 			if ( is_string( $value ) && preg_match( '/^\$(P|H|wp\$2y|2[aby]|argon2i?d?)\$/', $value ) ) {
 				$row[ $col ] = self::REDACTED;
+			} elseif ( is_string( $value ) && self::REDACTED !== $value ) {
+				// A setting stored as serialized data or JSON keeps its secrets inside (an SMTP password, a gateway key).
+				$row[ $col ] = self::redact_deep( $value );
 			}
 		}
 		return $row;
+	}
+
+	/**
+	 * Whether a key inside a stored setting names a secret: the option/meta rules plus the short
+	 * names plugins use inside their settings (pass, smtpPass, token, client_secret, webhook_key).
+	 *
+	 * @param string $key Key.
+	 * @return bool
+	 */
+	public static function is_secret_field( $key ) {
+		$key = strtolower( (string) $key );
+		return self::is_secret_key( $key ) || (bool) preg_match( '/(pass|pwd|token|secret|apikey|auth_?key|signing_?key|webhook_?key|encryption_?key|consumer_?key|_key_?secret)$/', $key );
+	}
+
+	/**
+	 * A value with the secrets inside it redacted: array fields named like secrets, serialized
+	 * data and JSON (redacted inside, stored shape kept), and well-known token shapes in text.
+	 * Objects are never created from serialized data.
+	 *
+	 * @param mixed $v     Value.
+	 * @param int   $depth Nesting depth.
+	 * @return mixed
+	 */
+	public static function redact_deep( $v, $depth = 0 ) {
+		if ( $depth > 12 ) {
+			return $v;
+		}
+		if ( $v instanceof \stdClass ) {
+			$v = get_object_vars( $v );
+		}
+		if ( is_array( $v ) ) {
+			foreach ( $v as $k => $x ) {
+				if ( is_string( $k ) && self::is_secret_field( $k ) && ( is_string( $x ) || is_int( $x ) ) && '' !== (string) $x ) {
+					$v[ $k ] = self::REDACTED;
+				} else {
+					$v[ $k ] = self::redact_deep( $x, $depth + 1 );
+				}
+			}
+			return $v;
+		}
+		if ( ! is_string( $v ) || '' === $v ) {
+			return $v;
+		}
+		if ( preg_match( '/^a:\d+:\{/', ltrim( $v ) ) ) {
+			$data = @unserialize( trim( $v ), array( 'allowed_classes' => false ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize -- stored data, never objects; a broken value is left as it is.
+			if ( is_array( $data ) ) {
+				$clean = self::redact_deep( $data, $depth + 1 );
+				return $clean === $data ? $v : serialize( $clean ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- same shape as stored, secrets redacted.
+			}
+			return $v;
+		}
+		$s = ltrim( $v );
+		if ( '' !== $s && ( '{' === $s[0] || '[' === $s[0] ) && strlen( $v ) < 2000000 ) {
+			$data = json_decode( $v, true );
+			if ( is_array( $data ) ) {
+				$clean = self::redact_deep( $data, $depth + 1 );
+				return $clean === $data ? $v : (string) json_encode( $clean, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- pure rules, no WordPress here.
+			}
+		}
+		return self::redact_tokens( $v );
+	}
+
+	/**
+	 * Well-known secret shapes in text (payment, AI, cloud and chat keys, private keys, JWTs).
+	 *
+	 * @param string $s Text.
+	 * @return string
+	 */
+	public static function redact_tokens( $s ) {
+		return (string) preg_replace(
+			array(
+				'/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/',
+				'/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/',
+				'/\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/',
+				'/\bAIza[0-9A-Za-z_-]{30,}/',
+				'/\b(?:ghp|gho|ghs|ghu|github_pat)_[A-Za-z0-9_]{20,}/',
+				'/\bxox[abprs]-[A-Za-z0-9-]{10,}/',
+				'/\bAKIA[0-9A-Z]{16}\b/',
+				'/\b\d{8,10}:[A-Za-z0-9_-]{35}\b/',
+				'/\b(?:ck|cs)_[0-9a-f]{40}\b/',
+			),
+			self::REDACTED,
+			(string) $s
+		);
 	}
 
 	/**

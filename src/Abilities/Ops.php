@@ -163,8 +163,9 @@ final class Ops {
 				$out[ $name ] = DbRules::REDACTED;
 				continue;
 			}
-			$v            = get_option( $name, $sentinel );
-			$out[ $name ] = $v === $sentinel ? null : self::clip_value( $v );
+			$v = get_option( $name, $sentinel );
+			// Secrets inside a setting (an SMTP password, a payment gateway key) are redacted too.
+			$out[ $name ] = $v === $sentinel ? null : self::clip_value( DbRules::redact_deep( $v ) );
 		}
 		return array( 'options' => $out );
 	}

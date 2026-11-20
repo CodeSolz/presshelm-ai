@@ -4,7 +4,7 @@ Tags: ai, ai assistant, telegram, mcp, content
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -178,10 +178,16 @@ No. On the Business and Agency plans one Telegram bot (and one Claude or ChatGPT
 
 == Changelog ==
 
-= 1.0.1 =
+= Version: 1.0.2 ( November 20, 2026 ) =
+* Security: passwords and keys stored inside a plugin's settings (for example an SMTP password or a payment gateway key) are now hidden from your AI when it reads settings, database rows or another plugin's results.
+* New: your AI can make several text changes to one page or field in a single step. They are saved together as one change, and if any of them does not match, nothing is saved.
+* New: text with accents or other non-English letters (such as "Café") is now found and changed inside page builder data such as Elementor's.
+* New: while someone has a page open in the editor, PressHelm does not save over it. Your AI is told who is editing it and asks you to try again once they have saved and closed it.
+
+= Version: 1.0.1 ( November 18, 2026 ) =
 * Sign in to PressHelm with an emailed code instead of a password: your administrator email is filled in when you connect.
 * New: "Sign in with your website" confirmation page.
 * A new Telegram owner now also needs a code from the PressHelm account owner's email, so a stolen WordPress login cannot take over your assistant.
 
-= 1.0.0 =
+= Version: 1.0.0 ( November 13, 2026 ) =
 * First release.

@@ -129,6 +129,32 @@ final class Dispatcher {
 	}
 
 	/**
+	 * The name of the person who has the post a one-post edit targets open in an editor, or ''.
+	 *
+	 * @param string $ability Ability id.
+	 * @param array  $payload Payload.
+	 * @return string
+	 */
+	public static function locked_by( $ability, array $payload ) {
+		if ( ! in_array( $ability, self::STAGE_EDITS, true ) ) {
+			return '';
+		}
+		$id = (int) ( $payload['id'] ?? ( $payload['post_id'] ?? 0 ) );
+		if ( $id <= 0 || ! get_post( $id ) ) {
+			return '';
+		}
+		if ( ! function_exists( 'wp_check_post_lock' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/post.php';
+		}
+		$user = (int) wp_check_post_lock( $id );
+		if ( ! $user || ( class_exists( TaskUser::class ) && TaskUser::is( $user ) ) ) {
+			return '';
+		}
+		$u = get_userdata( $user );
+		return $u ? (string) $u->display_name : 'Another user';
+	}
+
+	/**
 	 * Runs the ability.
 	 *
 	 * @param array $cmd Verified command.
@@ -164,6 +190,19 @@ final class Dispatcher {
 				'result' => array(
 					'error'   => 'approval_required',
 					'message' => 'This change needs the site owner\'s approval.',
+				),
+			);
+		}
+		// Someone has this page open in the editor (WordPress's own edit lock, which Elementor and the
+		// block editor keep while a page is open): saving now would be overwritten by their next save,
+		// or overwrite their unsaved work. The AI is told who, and to try again later.
+		$locked = self::locked_by( (string) $cmd['ability'], (array) ( $cmd['payload'] ?? array() ) );
+		if ( $locked ) {
+			return array(
+				'status' => 'failed',
+				'result' => array(
+					'error'   => 'post_locked',
+					'message' => $locked . ' has this page open in the editor right now, so PressHelm did not save over it. Nothing was changed. Ask them to save and close the editor (or wait a few minutes), then try again.',
 				),
 			);
 		}

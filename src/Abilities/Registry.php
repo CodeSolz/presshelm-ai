@@ -140,7 +140,7 @@ final class Registry {
 				'undo'        => null,
 			),
 		);
-		$all = array_merge( $own, Content::definitions(), Media::definitions(), MediaEdit::definitions(), MediaPlace::definitions(), Mail::definitions(), Report::definitions(), Terms::definitions(), Site::definitions(), Plugins::definitions(), Themes::definitions(), Database::definitions(), Ops::definitions(), Cache::definitions(), Revisions::definitions(), Generic::definitions(), Seo::definitions(), Woo::definitions(), Builder::definitions(), PluginRecords::definitions(), Forms::definitions(), Logs::definitions(), PageView::definitions(), Stage::definitions(), Users::definitions(), Comments::definitions(), Core::definitions(), FileTools::definitions(), \PressHelm\Woo\Catalog::definitions(), Porting::definitions(), ThirdParty::definitions() );
+		$all = array_merge( $own, Content::definitions(), Media::definitions(), MediaEdit::definitions(), MediaPlace::definitions(), Mail::definitions(), Report::definitions(), Terms::definitions(), Site::definitions(), Plugins::definitions(), Themes::definitions(), Database::definitions(), Ops::definitions(), Cache::definitions(), Revisions::definitions(), Generic::definitions(), Seo::definitions(), Woo::definitions(), Builder::definitions(), PluginRecords::definitions(), Forms::definitions(), Logs::definitions(), PageView::definitions(), Stage::definitions(), Users::definitions(), Comments::definitions(), Core::definitions(), FileTools::definitions(), \PressHelm\Woo\Catalog::definitions(), Porting::definitions(), ThirdParty::definitions(), Acf::definitions() );
 		return $all;
 	}
 

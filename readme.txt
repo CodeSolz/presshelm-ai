@@ -4,7 +4,7 @@ Tags: ai, ai assistant, telegram, mcp, content
 Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -177,6 +177,13 @@ No. On the Business and Agency plans one Telegram bot (and one Claude or ChatGPT
 4. Claude & ChatGPT apps: connect PressHelm as a connector.
 
 == Changelog ==
+
+= Version: 1.0.3 ( November 24, 2026 ) =
+* New: Advanced Custom Fields. Your AI can read the ACF fields of a page, post or category and change them through ACF itself, with each value checked against its field. Undo puts every value back. Options pages can be read, with passwords and keys hidden.
+* New: your AI can build a new, empty page with Elementor from scratch. Undo makes it a plain empty page again.
+* Fix: an Elementor inner section is accepted when your AI describes it as a widget.
+* Fix: undoing the first change on a blank Elementor page no longer reports damaged data.
+* Fix: when the whole site is behind an HTTP password (common on staging sites), the check after a change says it could not get in, instead of treating the change as broken.
 
 = Version: 1.0.2 ( November 20, 2026 ) =
 * Security: passwords and keys stored inside a plugin's settings (for example an SMTP password or a payment gateway key) are now hidden from your AI when it reads settings, database rows or another plugin's results.

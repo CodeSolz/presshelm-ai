@@ -141,6 +141,13 @@ final class Journal {
 					return $r;
 				}
 				break;
+			case 'acf':
+				// Target: post:<id> / term:<id>; before: {acf_id, type, id, fields}.
+				$r = \PressHelm\Abilities\Acf::restore( $before );
+				if ( is_wp_error( $r ) ) {
+					return $r;
+				}
+				break;
 			case 'record':
 				// Target: post id of another plugin's record; before: {post: columns, meta: exact values}.
 				$r = \PressHelm\Packs\Records::restore( (int) $row['target'], $before );

@@ -181,7 +181,8 @@ final class Elementor implements Adapter {
 	 * @return true|\WP_Error
 	 */
 	public function restore( $post_id, $raw ) {
-		$elements = json_decode( (string) $raw, true );
+		// A page Elementor opened but never saved has no data yet: that is an empty page, not damage.
+		$elements = '' === (string) $raw ? array() : json_decode( (string) $raw, true );
 		if ( ! is_array( $elements ) ) {
 			return new \WP_Error( 'presshelm_journal_corrupt', 'The saved Elementor data is damaged' );
 		}
@@ -194,6 +195,45 @@ final class Elementor implements Adapter {
 			update_post_meta( (int) $post_id, self::META, wp_slash( (string) $raw ) );
 			$this->clear_css( $post_id );
 		}
+		return true;
+	}
+
+	/**
+	 * Starts an empty page in Elementor (as "Edit with Elementor" does); the elements follow in change().
+	 *
+	 * @param int $post_id Post id.
+	 * @return true|\WP_Error
+	 */
+	public function start( $post_id ) {
+		$document = \Elementor\Plugin::$instance->documents->get( (int) $post_id, false );
+		if ( ! $document ) {
+			return new \WP_Error( 'presshelm_not_found', 'Elementor cannot edit this kind of content' );
+		}
+		if ( method_exists( $document, 'set_is_built_with_elementor' ) ) {
+			$document->set_is_built_with_elementor( true );
+		} else {
+			update_post_meta( (int) $post_id, '_elementor_edit_mode', 'builder' );
+		}
+		return true;
+	}
+
+	/**
+	 * Undoes start(): the page is a plain, empty page again.
+	 *
+	 * @param int $post_id Post id.
+	 * @return true
+	 */
+	public function unstart( $post_id ) {
+		foreach ( array( '_elementor_edit_mode', self::META, '_elementor_version', '_elementor_pro_version', '_elementor_template_type', '_elementor_page_settings', '_elementor_css', '_elementor_page_assets', '_elementor_element_cache' ) as $key ) {
+			delete_post_meta( (int) $post_id, $key );
+		}
+		// Elementor keeps a plain-text copy of the page in post_content; the page was empty before.
+		wp_update_post(
+			array(
+				'ID'           => (int) $post_id,
+				'post_content' => '',
+			)
+		);
 		return true;
 	}
 
@@ -361,6 +401,11 @@ final class Elementor implements Adapter {
 			return new \WP_Error( 'presshelm_payload', 'Too many elements in one change (at most ' . self::MAX_ELEMENTS . ').' );
 		}
 		$type = (string) ( $el['elType'] ?? '' );
+		// An inner section is a section inside a column (Elementor marks it isInner), not a widget.
+		if ( in_array( strtolower( str_replace( '_', '-', ( 'widget' === $type ? (string) ( $el['widgetType'] ?? '' ) : $type ) ) ), array( 'inner-section', 'innersection' ), true ) ) {
+			$type = 'section';
+			unset( $el['widgetType'] );
+		}
 		if ( ! isset( self::CHILDREN[ $type ] ) || '' === $type ) {
 			return new \WP_Error( 'presshelm_payload', 'elType must be section, column, container or widget.' );
 		}

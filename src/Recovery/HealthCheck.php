@@ -322,6 +322,15 @@ final class HealthCheck {
 		if ( null === $out && preg_match( self::CHALLENGE, substr( $body, 0, 20000 ) ) ) {
 			$fail['challenge'] = true;
 		}
+		// An HTTP password in front of the site (host password protection, an .htaccess login or a
+		// plugin): the check cannot get in, which says nothing about the change.
+		$auth = wp_remote_retrieve_header( $res, 'www-authenticate' );
+		$auth = is_array( $auth ) ? implode( ', ', $auth ) : (string) $auth;
+		if ( 401 === $code && null === $out && preg_match( '/^\s*basic/i', $auth ) ) {
+			$realm             = preg_match( '/realm="([^"]{1,80})"/i', $auth, $m ) ? ' "' . sanitize_text_field( $m[1] ) . '"' : '';
+			$fail['reason']    = 'http_password: the site asks for an HTTP password' . $realm . ' (Basic login), usually the host\'s password protection, an .htaccess login or a plugin that protects the whole site; the check could not get in';
+			$fail['challenge'] = true;
+		}
 		return $fail;
 	}
 

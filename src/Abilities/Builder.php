@@ -218,7 +218,7 @@ final class Builder {
 				'mutates'     => true,
 				'run'         => array( self::class, 'change' ),
 				'label'       => 'Add, remove, move or duplicate a page-builder element',
-				'description' => 'Structure changes through the builder\'s own save: insert an element (widget, section, column, container) at a position, remove one, move one, or duplicate one (fresh ids, placed after it). The builder\'s nesting rules and registered widgets apply; HTML/shortcode widgets and custom code are never added. Bound to data_sha256 from builder.read. Undo puts the page back exactly.',
+				'description' => 'Structure changes through the builder\'s own save: insert an element (widget, section, column, container) at a position, remove one, move one, or duplicate one (fresh ids, placed after it). An empty page (builder.read can_start) is started with a builder by an insert with builder set. The builder\'s nesting rules and registered widgets apply; HTML/shortcode widgets and custom code are never added. Bound to data_sha256 from builder.read. Undo puts the page back exactly.',
 				'input'       => array(
 					'type'                 => 'object',
 					'properties'           => array(
@@ -240,6 +240,10 @@ final class Builder {
 							'minimum' => 0,
 						),
 						'element'     => array( 'type' => 'object' ),
+						'builder'     => array(
+							'type'    => 'string',
+							'pattern' => '^[a-z0-9][a-z0-9_-]{1,60}$',
+						),
 						'data_sha256' => array(
 							'type'    => 'string',
 							'pattern' => '^[a-fA-F0-9]{64}$',
@@ -295,6 +299,25 @@ final class Builder {
 		}
 		$a = self::for_post( $post->ID, $p['packs'] ?? array() );
 		if ( ! $a ) {
+			$can = self::empty_page( $post ) ? self::startable() : array();
+			if ( $can ) {
+				// A new, empty page: the agent can build it with a builder from scratch.
+				return array(
+					'id'          => $post->ID,
+					'builder'     => null,
+					'empty'       => true,
+					'can_start'   => array_map(
+						static function ( Adapter $x ) {
+							return $x->id();
+						},
+						$can
+					),
+					'data_sha256' => hash( 'sha256', '' ),
+					'elements'    => array(),
+					'vocabulary'  => $can[0]->vocabulary(),
+					'how'         => 'This page is empty and not built with a builder yet. To build it with ' . $can[0]->id() . ': builder.change op "insert" with builder "' . $can[0]->id() . '", this data_sha256 and the first top-level element. Undo makes it a plain empty page again.',
+				);
+			}
 			return self::not_builder( $p );
 		}
 		return array(
@@ -357,11 +380,27 @@ final class Builder {
 		if ( ! $post || ! current_user_can( 'edit_post', $post->ID ) ) {
 			return new \WP_Error( 'presshelm_not_found', 'Post not found' );
 		}
-		$a = self::for_post( $post->ID, $p['packs'] ?? array() );
+		$a       = self::for_post( $post->ID, $p['packs'] ?? array() );
+		$started = false;
+		if ( ! $a && ! empty( $p['builder'] ) && 'insert' === (string) $p['op'] ) {
+			// Build an empty page with a builder from scratch (builder.read said can_start).
+			foreach ( self::startable() as $x ) {
+				if ( $x->id() === (string) $p['builder'] ) {
+					$a = $x;
+				}
+			}
+			if ( ! $a ) {
+				return new \WP_Error( 'presshelm_not_builder', 'That builder is not active on this site or cannot start a page.' );
+			}
+			if ( ! self::empty_page( $post ) ) {
+				return new \WP_Error( 'presshelm_not_empty', 'Only an empty page can be started with a builder; this one already has content (use blocks.inspect / content.read).' );
+			}
+			$started = true;
+		}
 		if ( ! $a ) {
 			return self::not_builder( $p );
 		}
-		$raw = $a->raw( $post->ID );
+		$raw = $started ? '' : $a->raw( $post->ID );
 		if ( ! hash_equals( hash( 'sha256', $raw ), strtolower( (string) $p['data_sha256'] ) ) ) {
 			return new \WP_Error( 'presshelm_conflict', 'The page changed since it was read; read it again' );
 		}
@@ -369,9 +408,16 @@ final class Builder {
 			$command_id,
 			'builder',
 			(string) $post->ID,
-			self::journal_entry( $a, $raw )
+			self::journal_entry( $a, $raw ) + ( $started ? array( 'started' => true ) : array() )
 		);
-		$r       = $a->change( $post->ID, $p );
+		if ( $started ) {
+			$s = $a->start( $post->ID );
+			if ( is_wp_error( $s ) ) {
+				Journal::restore( $journal );
+				return $s;
+			}
+		}
+		$r = $a->change( $post->ID, $p );
 		if ( is_wp_error( $r ) ) {
 			Journal::restore( $journal );
 			return $r;
@@ -403,6 +449,32 @@ final class Builder {
 			$out['pack'] = $a->pack();
 		}
 		return $out;
+	}
+
+	/**
+	 * Active adapters that can start an empty page from scratch.
+	 *
+	 * @return Adapter[]
+	 */
+	private static function startable() {
+		return array_values(
+			array_filter(
+				self::active(),
+				static function ( Adapter $a ) {
+					return method_exists( $a, 'start' ) && method_exists( $a, 'unstart' );
+				}
+			)
+		);
+	}
+
+	/**
+	 * A page with nothing in it yet (a new draft): no content and no builder data.
+	 *
+	 * @param \WP_Post $post Post.
+	 * @return bool
+	 */
+	private static function empty_page( $post ) {
+		return '' === trim( (string) $post->post_content ) && '' === (string) get_post_meta( $post->ID, '_elementor_data', true );
 	}
 
 	/**
@@ -439,6 +511,10 @@ final class Builder {
 			if ( $a->id() === ( $before['adapter'] ?? '' ) ) {
 				if ( ! $a->active() ) {
 					return new \WP_Error( 'presshelm_builder_inactive', 'The page builder is not active; activate it, then undo again' );
+				}
+				// The change started the page with this builder: undo makes it a plain empty page again.
+				if ( ! empty( $before['started'] ) && method_exists( $a, 'unstart' ) ) {
+					return $a->unstart( (int) $post_id );
 				}
 				return $a->restore( (int) $post_id, (string) ( $before['raw'] ?? '' ) );
 			}
